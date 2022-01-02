@@ -1,0 +1,315 @@
+#!/bin/python3
+
+import wikipedia as wiki
+import sys
+import os
+import requests
+import pygame 
+from gtts import gTTS
+from playsound import playsound
+from time import sleep
+from PIL import ImageTk, Image
+from tkinter import Label,Button, LabelFrame, Entry, Tk, LEFT, END, RIGHT, WORD, PanedWindow, TOP, BOTTOM
+from tkinter import ttk
+from tkinter import scrolledtext as st
+from tkinter import messagebox as msg
+from tkinter import Menu
+from tkinter import filedialog as fd
+from tkinter.simpledialog import askstring
+
+
+	#########################################
+	#	class for full screen view	#
+	#########################################
+
+class fullscreen:
+	def __init__(self, title, content):
+		
+		self.content_title = title
+		self.content = content
+		
+		self.master = Tk()
+		self.master.title(self.content_title)
+		self.master['bg'] = 'WHITE'
+		self.master.geometry('1105x670')
+		self.master.wm_attributes('-zoomed', 'True')
+		self.lbl_title = Label(self.master, text=self.content_title, font=('Times New Roman',25), background='CYAN', foreground='RED')
+		self.lbl_title.pack(pady=10)
+		
+		self.txt_content = st.ScrolledText(self.master, width=140, height=23, wrap=WORD)
+		self.txt_content.configure(font=('Times New Roman', 15))
+		self.txt_content.pack(padx=5, pady=15, fill='both')
+		tit = '\t\t\t\t\t\t\t' + self.content_title + '\n\n'
+		
+		self.txt_content.insert(1.0, tit + self.content)
+		
+		self.lblfrm = LabelFrame(self.master, text='')
+		self.lblfrm.pack()
+		
+		self.btn_save = Button(self.lblfrm, text='    Save    ', command=self.save, background='BLACK', foreground='WHITE')
+		self.btn_save.pack(side=LEFT)
+		
+		self.btn_back = Button(self.lblfrm, text='    Back    ', command=self.closeWindow, background='BLACK', foreground='WHITE')
+		self.btn_back.pack(side=LEFT)
+				
+		self.btn_close = Button(self.lblfrm, text='    Exit    ', command=self.exitApp, background='BLACK', foreground='WHITE')
+		self.btn_close.pack(side=LEFT)
+		
+		img = ImageTk.PhotoImage(Image.open('speaking.png'))
+		self.btn_speak = Button(self.lblfrm, text='Speak    ', command=self.speakOutput, image=img, compound=LEFT, background='BLACK', foreground='WHITE')
+		self.btn_speak.pack(fill='both', expand='True', padx=10)
+		
+		self.master.mainloop()
+	def closeWindow(self):
+		ch = msg.askyesno('Close','Sure to close this window?')
+		if ch == True:
+			self.master.destroy()
+			w = searchapp()
+		else:
+			pass
+			
+	def save(self):
+		content = self.textarea.get(1.0, END)
+		if len(content) > 2:
+			try:
+				filename = fd.asksaveasfilename()
+				with open(filename, 'w') as f:
+					head = self.txt_heading.get()
+					f.write('\t\t\t\t\t\t\t'+head+'\n\n')
+					f.write(content)
+					f.close()	
+				msg.showinfo('File' ,'File saved successfully as {}'.format(filename))
+			except Exception as e:
+				msg.showerror('Error',str(e))
+		else:
+			msg.showwarning('Warning','Nothing to save')
+			
+			#################################################
+			#	Function for playing audio		#
+			#################################################
+	def speakOutput(self):
+		pygame.init()
+		pygame.mixer.init()
+		
+		PATH = os.getcwd() + '/file.mp3'
+		speech = self.txt_content.get(1.0, END)
+		gts = gTTS(speech)
+		gts.save(PATH)
+		
+		win = Tk()
+		win.title('')
+		win.geometry('300x300+500+200')
+		win['bg'] = 'DeepSkyBlue2'
+		win.resizable(0,0)
+		
+		lbl1 = Label(win, text='Playing...', font=('Helvetica', 18), bg='DeepSkyBlue2').pack(pady=10)
+		lbl2 = Label(win, text=self.content_title, font=('Helvetica', 15), bg='DeepSkyBlue2').pack(pady=10)
+		
+		def play():
+			pygame.mixer.music.load(PATH)
+			pygame.mixer.music.play()
+			
+		def stop():
+			pygame.mixer.music.stop()
+		
+		def pause():
+			pygame.mixer.music.pause()
+		
+		def unpause():
+			pygame.mixer.music.unpause()
+		
+		lblfrm = LabelFrame(win, text="-", bg='DeepSkyBlue')
+		lblfrm.pack()
+		
+		btnplay = Button(lblfrm, text='Play', command=play).pack(side=TOP, padx=5, pady=5)
+		btnstop = Button(lblfrm, text='Stop', command=stop).pack(side=BOTTOM, padx=5, pady=5)
+		btnpause = Button(lblfrm, text='Pause', command=pause).pack(side=LEFT, padx=5, pady=5)
+		btnunp = Button(lblfrm, text='Resume', command=unpause).pack(side=RIGHT, padx=5, pady=5)
+							
+		ext = Button(win, text='  Back  ', command=lambda:win.destroy()).pack(pady=10)
+		win.mainloop()
+				
+	def exitApp(self):
+		ch = msg.askyesno('Exit','Sure to exit?')
+		if ch == True:
+			sys.exit(0)
+		else:
+			pass
+			
+
+		###########################################
+		#	class for main application	  #
+		###########################################
+
+class searchapp:
+	def __init__(self):
+		
+		self.start()
+		self.master = Tk()
+		self.master.title('Wikipedia Extractor')
+		self.master.geometry('800x600')
+		self.master['bg'] = 'WHITE'
+		self.master.wm_attributes('-zoomed','True')
+		
+		self.connStatus = self.checkNetConnection()
+		if self.connStatus is False:
+			msg.showerror('Internet Connection','Not connected to internet\nPlease connect to internet and and restart the browser')
+			sys.exit(1)
+		
+		self.menubar = Menu(self.master)
+		self.master.config(menu=self.menubar)
+		
+		self.home_menu = Menu(self.menubar, tearoff=0)
+		
+		self.menubar.add_cascade(label='Home', menu=self.home_menu)
+		self.home_menu.add_command(label='        Open        ', command=self.openFile)
+		self.home_menu.add_command(label='        Save        ', command=self.save)
+		self.home_menu.add_command(label='        Clear        ', command=self.clearText)
+		self.home_menu.add_command(label='        Full Screan        ', command=self.fullScreen)
+		self.home_menu.add_separator()
+		self.home_menu.add_command(label='        Exit        ', command=self.exitApp)
+		
+		self.about_menu = Menu(self.menubar, tearoff=0)
+		self.menubar.add_cascade(label='About', menu=self.about_menu)
+		self.about_menu.add_command(label='        developer        ', command=self.showDeveloper)
+		self.about_menu.add_command(label='        Version        ', command=self.showVersion)
+		self.about_menu.add_separator()
+		self.about_menu.add_command(label='        About        ', command=self.showAbout)
+				
+		self.lbl_head = Label(self.master, text="Wiki Extractor", font=('Times New Roman', 25), bg='WHITE', foreground='RED')
+		self.lbl_head.pack(expand=True)
+		
+		self.lblfrm = LabelFrame(self.master, text='Search', background='WHITE')
+		self.lblfrm.pack(pady=5, expand=True)
+		
+		self.lbl = Label(self.lblfrm, text="new", font=('Times New Roman',15), bg='WHITE')
+		self.lbl.pack(padx=15, pady=10, side=LEFT)
+		
+		self.txt_heading = Entry(self.lblfrm, width=50)
+		self.txt_heading.pack(side=LEFT)
+		self.txt_heading.bind("<Key>", self.keyPress)
+		
+		self.btn_search = Button(self.lblfrm, text='Search', command=self.searchData)
+		self.btn_search.pack(padx=15, pady=10, side=RIGHT)
+		
+		self.lblfrm_hntbx = LabelFrame(self.master, background='WHITE')
+		self.lblfrm_hntbx.pack(padx=0, pady=20)
+		
+		self.textarea = st.ScrolledText(self.lblfrm_hntbx, width=80, height=25, wrap=WORD)
+		self.textarea.pack(fill='both')
+		self.textarea.configure(font=('Times New Roman', 15))
+		
+		self.btnfrm = LabelFrame(self.master, text='.', background='WHITE')
+		self.btnfrm.pack(pady=5)
+			
+		self.txt_heading.focus()
+		
+		self.master.mainloop()
+		
+	def start(self):
+		self.start = Tk()
+		self.start.title('Wikipedia Extractor')
+		self.start.geometry('800x600')
+		img = ImageTk.PhotoImage(Image.open('wikipedia.png'))
+		self.lbl_image = Label(self.start, image=img)
+		self.lbl_image.pack(fill='both', expand='yes', padx=10, pady=10)
+		
+		self.lbl_load = Label(self.start, text='Checking for Internet Connection...', font=('Arial', 20))
+		self.lbl_load.pack(fill='both', expand='yes', padx=10, pady=10)
+		
+		self.lbl_head = Label(self.start, text="Wiki Extractor", font=('Times New Roman', 25), foreground='RED')
+		self.lbl_head.pack(expand=True)
+		self.start.wm_attributes('-fullscreen', 'True')
+		self.start.after(5000, lambda:self.start.destroy())
+		self.start.mainloop()
+
+		
+	def clearText(self):
+		text = ''
+		self.textarea.configure(state='normal')
+		self.txt_heading.delete(0,END)
+		self.textarea.delete(1.0, END)
+		self.txt_heading.insert(0, text)
+		self.textarea.insert(1.0, text)
+		
+	def exitApp(self):
+		ch = msg.askyesno('Exit','Sure to exit?')
+		if ch == True:
+			sys.exit(0)
+		else:
+			pass
+	
+	def searchData(self):
+		search = self.txt_heading.get()
+		
+		try:
+			result = wiki.page(search).content
+			self.textarea.delete(1.0, END)
+			self.textarea.insert(1.0, result)
+			
+		except wiki.exceptions.DisambiguationError as e:
+			self.textarea.delete(1.0, END)
+			self.textarea.insert(1.0, e)
+			
+		except wiki.exceptions.PageError as e:
+			self.textarea.delete(1.0, END)
+			self.textarea.insert(1.0, e)
+			
+	def openFile(self):
+		filename = fd.askopenfilename()
+		with open(str(filename), 'r') as f:
+			content = f.read()
+			f.close()
+			self.master.destroy()
+			obj = fullscreen(filename, content)
+		
+			
+	def fullScreen(self):
+		title = self.txt_heading.get()
+		content = self.textarea.get(1.0, END)
+		if len(content) > 200:
+			self.master.destroy()
+			w = fullscreen(title,content)
+		else:
+			msg.showinfo('Full Screen','Not enough content to get on full screen')
+			
+	def save(self):
+		content = self.textarea.get(1.0, END)
+		if len(content) > 2:
+			try:
+				filename = fd.asksaveasfilename()
+				with open(filename, 'w') as f:
+					head = self.txt_heading.get()
+					f.write('\t\t\t\t\t\t\t'+head+'\n\n')
+					f.write(content)
+					f.close()	
+				msg.showinfo('File' ,'File saved successfully as {}'.format(filename))
+			except Exception as e:
+				msg.showerror('Error',str(e))
+		else:
+			msg.showwarning('Warning','Nothing to save')
+		
+	def showVersion(self):
+		msg.showinfo('Version', "Version : 1.0")
+		
+	def showDeveloper(self):
+		msg.showinfo('Developer', 'Dheeraj Gupta')
+		
+	def showAbout(self):
+		ab = 'The Wikipedia extractor tool generates plain text from a Wikipedia database dump, discarding any other information or annotation present in Wikipedia pages, such as images, tables, references and lists.'
+		msg.showinfo('About wikiextractor', ab)
+		
+	def keyPress(self, event):
+		if event.keysym == 'Return':
+			self.searchData()
+		else:
+			pass
+			
+	def checkNetConnection(self):
+		try:
+			requests.head('https://www.google.com/', timeout=3)
+			return True
+		except requests.ConnectionError as e:
+			return False
+	
+w = searchapp()
